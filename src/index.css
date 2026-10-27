@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Baloo 2', 'Plus Jakarta Sans', sans-serif;
+    --font-sans: 'Plus Jakarta Sans', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #070B19;
+    color: #F8FAFC;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono-num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes floatSlow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(1.5deg); }
+}
+
+@keyframes cosmicFloatSpace {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate3d(5px, -9px, 0) rotate(1.1deg);
+  }
+  50% {
+    transform: translate3d(-4px, -14px, 0) rotate(-0.9deg);
+  }
+  75% {
+    transform: translate3d(-6px, -6px, 0) rotate(0.8deg);
+  }
+}
+
+@keyframes cosmicNameWave {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0) rotate(-0.6deg) scale(1);
+  }
+  33% {
+    transform: translate3d(3px, -6px, 0) rotate(0.8deg) scale(1.025);
+  }
+  66% {
+    transform: translate3d(-3px, -3px, 0) rotate(-0.4deg) scale(1.01);
+  }
+}
+
+@keyframes orbitBadgeFloat {
+  0%, 100% {
+    transform: translate3d(0px, 0px, 0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translate3d(-4px, -8px, 0) rotate(12deg) scale(1.12);
+  }
+}
+
+@keyframes beamSweep {
+  0%, 100% { transform: rotate(-12deg) scaleX(1); opacity: 0.75; }
+  50% { transform: rotate(12deg) scaleX(1.15); opacity: 0.95; }
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.75); opacity: 0; }
+  70% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-float-slow {
+  animation: floatSlow 3.6s ease-in-out infinite;
+}
+
+.animate-cosmic-float {
+  animation: cosmicFloatSpace 4.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-cosmic-name-wave {
+  animation: cosmicNameWave 3.4s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-orbit-badge {
+  animation: orbitBadgeFloat 3.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-beam-sweep {
+  animation: beamSweep 2.4s ease-in-out infinite;
+}
+
+.animate-pop-in {
+  animation: popIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom scrollbar for modals */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.4);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.7);
+}

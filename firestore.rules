@@ -1,0 +1,257 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1 & Phase 4.1: Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Hardened Global Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprint 1: TeacherWorkspace (/users/{userId})
+    function isValidWorkspace(data) {
+      return data.keys().hasAll([
+        'ownerId',
+        'displayName',
+        'activeRosterId',
+        'soundEnabled',
+        'soundEffectsVolume',
+        'voiceReadingEnabled',
+        'catchProbability',
+        'nearMissProbability',
+        'falseSignalProbability',
+        'animationSpeed',
+        'noRepeatInCycle',
+        'maxConsecutiveMisses',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ownerId',
+        'displayName',
+        'activeRosterId',
+        'soundEnabled',
+        'soundEffectsVolume',
+        'voiceReadingEnabled',
+        'catchProbability',
+        'nearMissProbability',
+        'falseSignalProbability',
+        'animationSpeed',
+        'noRepeatInCycle',
+        'maxConsecutiveMisses',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.ownerId == request.auth.uid &&
+      isValidId(data.ownerId) &&
+      data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+      isValidId(data.activeRosterId) &&
+      data.soundEnabled is bool &&
+      data.soundEffectsVolume is number && data.soundEffectsVolume >= 0 && data.soundEffectsVolume <= 1 &&
+      data.voiceReadingEnabled is bool &&
+      data.catchProbability is number && data.catchProbability >= 0 && data.catchProbability <= 100 &&
+      data.nearMissProbability is number && data.nearMissProbability >= 0 && data.nearMissProbability <= 100 &&
+      data.falseSignalProbability is number && data.falseSignalProbability >= 0 && data.falseSignalProbability <= 100 &&
+      data.animationSpeed is number && data.animationSpeed >= 0.25 && data.animationSpeed <= 3 &&
+      data.noRepeatInCycle is bool &&
+      data.maxConsecutiveMisses is int && data.maxConsecutiveMisses >= 1 && data.maxConsecutiveMisses <= 10 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint 2: ClassRosterDoc (/rosters/{rosterId})
+    function isValidRoster(data) {
+      return data.keys().hasAll([
+        'ownerId',
+        'rosterId',
+        'name',
+        'currentCycle',
+        'studentNames',
+        'calledStudentNames',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ownerId',
+        'rosterId',
+        'name',
+        'currentCycle',
+        'studentNames',
+        'calledStudentNames',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.ownerId == request.auth.uid &&
+      isValidId(data.ownerId) &&
+      isValidId(data.rosterId) &&
+      data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+      data.currentCycle is int && data.currentCycle >= 1 && data.currentCycle <= 10000 &&
+      data.studentNames is list && data.studentNames.size() <= 100 &&
+      (data.studentNames.size() == 0 || (data.studentNames[0] is string && data.studentNames[0].size() >= 1 && data.studentNames[0].size() <= 100)) &&
+      data.calledStudentNames is list && data.calledStudentNames.size() <= 100 &&
+      (data.calledStudentNames.size() == 0 || (data.calledStudentNames[0] is string && data.calledStudentNames[0].size() >= 1 && data.calledStudentNames[0].size() <= 100)) &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint 3: CallHistoryDoc (/callHistory/{historyId})
+    function isValidCallHistory(data) {
+      return data.keys().hasAll([
+        'ownerId',
+        'historyId',
+        'rosterId',
+        'studentName',
+        'className',
+        'cycleNumber',
+        'orderNumber',
+        'calledAtIso',
+        'createdAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ownerId',
+        'historyId',
+        'rosterId',
+        'studentName',
+        'className',
+        'cycleNumber',
+        'orderNumber',
+        'calledAtIso',
+        'createdAt'
+      ]) &&
+      data.ownerId == request.auth.uid &&
+      isValidId(data.ownerId) &&
+      isValidId(data.historyId) &&
+      isValidId(data.rosterId) &&
+      data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 100 &&
+      data.className is string && data.className.size() >= 1 && data.className.size() <= 100 &&
+      data.cycleNumber is int && data.cycleNumber >= 1 && data.cycleNumber <= 10000 &&
+      data.orderNumber is int && data.orderNumber >= 1 && data.orderNumber <= 100000 &&
+      data.calledAtIso is string && data.calledAtIso.size() >= 10 && data.calledAtIso.size() <= 40 &&
+      data.createdAt is timestamp;
+    }
+
+    // Collection 1: TeacherWorkspace (/users/{userId})
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && (resource == null || existing().ownerId == request.auth.uid);
+      allow list: if false;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(userId) &&
+        userId == request.auth.uid &&
+        isValidWorkspace(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isValidWorkspace(incoming()) &&
+        isVerifiedUser() &&
+        isValidId(userId) &&
+        userId == request.auth.uid &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Switch active roster
+          incoming().diff(existing()).affectedKeys().hasOnly(['activeRosterId', 'updatedAt']) ||
+          // Action 2: Update teacher settings and workspace preferences
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName',
+            'activeRosterId',
+            'soundEnabled',
+            'soundEffectsVolume',
+            'voiceReadingEnabled',
+            'catchProbability',
+            'nearMissProbability',
+            'falseSignalProbability',
+            'animationSpeed',
+            'noRepeatInCycle',
+            'maxConsecutiveMisses',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if false;
+    }
+
+    // Collection 2: ClassRosterDoc (/rosters/{rosterId})
+    match /rosters/{rosterId} {
+      allow get: if isSignedIn() && isValidId(rosterId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(rosterId) &&
+        isValidRoster(incoming()) &&
+        incoming().rosterId == rosterId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+
+      allow update: if isValidRoster(incoming()) &&
+        isVerifiedUser() &&
+        isValidId(rosterId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().rosterId == existing().rosterId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          // Action 1: Full roster or student list update
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'name',
+            'studentNames',
+            'calledStudentNames',
+            'currentCycle',
+            'updatedAt'
+          ]) ||
+          // Action 2: Mark student called or advance cycle
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'calledStudentNames',
+            'currentCycle',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if isVerifiedUser() &&
+        isValidId(rosterId) &&
+        existing().ownerId == request.auth.uid;
+    }
+
+    // Collection 3: CallHistoryDoc (/callHistory/{historyId})
+    match /callHistory/{historyId} {
+      allow get: if isSignedIn() && isValidId(historyId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(historyId) &&
+        isValidCallHistory(incoming()) &&
+        incoming().historyId == historyId &&
+        incoming().createdAt == request.time &&
+        exists(/databases/$(database)/documents/rosters/$(incoming().rosterId)) &&
+        get(/databases/$(database)/documents/rosters/$(incoming().rosterId)).data.ownerId == request.auth.uid;
+
+      allow update: if false;
+
+      allow delete: if isVerifiedUser() &&
+        isValidId(historyId) &&
+        existing().ownerId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "entities": {
+    "TeacherWorkspace": {
+      "title": "TeacherWorkspace",
+      "description": "Stores a teacher's active classroom roster selection and game configuration preferences synced to their Google account.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the teacher who owns this workspace.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the teacher.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "activeRosterId": {
+          "type": "string",
+          "description": "ID of the currently active ClassRoster document.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "soundEnabled": {
+          "type": "boolean",
+          "description": "Whether classroom sound effects and audio are enabled."
+        },
+        "soundEffectsVolume": {
+          "type": "number",
+          "description": "Master sound volume from 0 to 1."
+        },
+        "voiceReadingEnabled": {
+          "type": "boolean",
+          "description": "Whether Vietnamese speech synthesis is enabled."
+        },
+        "catchProbability": {
+          "type": "number",
+          "description": "Probability percentage (0-100) of catching a student."
+        },
+        "nearMissProbability": {
+          "type": "number",
+          "description": "Probability percentage (0-100) of a near miss."
+        },
+        "falseSignalProbability": {
+          "type": "number",
+          "description": "Probability percentage (0-100) of a false signal."
+        },
+        "animationSpeed": {
+          "type": "number",
+          "description": "Animation speed multiplier (0.25 to 3)."
+        },
+        "noRepeatInCycle": {
+          "type": "boolean",
+          "description": "Whether students cannot be called twice in the same cycle."
+        },
+        "maxConsecutiveMisses": {
+          "type": "number",
+          "description": "Maximum consecutive misses before forcing a catch (1-10)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the workspace was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the workspace was last updated."
+        }
+      },
+      "required": [
+        "ownerId",
+        "displayName",
+        "activeRosterId",
+        "soundEnabled",
+        "soundEffectsVolume",
+        "voiceReadingEnabled",
+        "catchProbability",
+        "nearMissProbability",
+        "falseSignalProbability",
+        "animationSpeed",
+        "noRepeatInCycle",
+        "maxConsecutiveMisses",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ClassRosterDoc": {
+      "title": "ClassRosterDoc",
+      "description": "Stores a classroom student list and current cycle status owned by a teacher.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the teacher who owns this class roster.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "rosterId": {
+          "type": "string",
+          "description": "Unique identifier of the roster document.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the class (e.g., Lớp 3A - Vũ Trụ Nhí).",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "currentCycle": {
+          "type": "number",
+          "description": "Current non-repeating call cycle number (>= 1)."
+        },
+        "studentNames": {
+          "type": "array",
+          "description": "Bounded list (max 100) of student full names in the class."
+        },
+        "calledStudentNames": {
+          "type": "array",
+          "description": "Bounded list (max 100) of student names already called in the current cycle."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the roster was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the roster was last updated."
+        }
+      },
+      "required": [
+        "ownerId",
+        "rosterId",
+        "name",
+        "currentCycle",
+        "studentNames",
+        "calledStudentNames",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CallHistoryDoc": {
+      "title": "CallHistoryDoc",
+      "description": "Immutable record of a student selected by the UFO during a classroom session.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the teacher who owns this history entry.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "historyId": {
+          "type": "string",
+          "description": "Unique identifier of the history entry.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "rosterId": {
+          "type": "string",
+          "description": "ID of the parent ClassRosterDoc.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "studentName": {
+          "type": "string",
+          "description": "Full Vietnamese name of the chosen student.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "className": {
+          "type": "string",
+          "description": "Class name at the time of selection.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "cycleNumber": {
+          "type": "number",
+          "description": "Cycle number when the student was called."
+        },
+        "orderNumber": {
+          "type": "number",
+          "description": "Sequential call order number."
+        },
+        "calledAtIso": {
+          "type": "string",
+          "description": "ISO timestamp string for display and CSV export.",
+          "minLength": 10,
+          "maxLength": 40
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the history record was created."
+        }
+      },
+      "required": [
+        "ownerId",
+        "historyId",
+        "rosterId",
+        "studentName",
+        "className",
+        "cycleNumber",
+        "orderNumber",
+        "calledAtIso",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/TeacherWorkspace"
+      },
+      "description": "Per-teacher workspace settings and active roster reference."
+    },
+    "/rosters/{rosterId}": {
+      "schema": {
+        "$ref": "#/entities/ClassRosterDoc"
+      },
+      "description": "Teacher-owned classroom student rosters and cycle status."
+    },
+    "/callHistory/{historyId}": {
+      "schema": {
+        "$ref": "#/entities/CallHistoryDoc"
+      },
+      "description": "Teacher-owned UFO student call history records."
+    }
+  }
+}

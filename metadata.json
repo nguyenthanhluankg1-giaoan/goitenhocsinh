@@ -1,0 +1,6 @@
+{
+  "name": "UFO May Mắn – Ai Sẽ Được UFO Chọn?",
+  "description": "Trò chơi giáo dục 3D Chibi vũ trụ săn tìm và gọi tên học sinh ngẫu nhiên công bằng, vui nhộn dành cho lớp học tiểu học.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
