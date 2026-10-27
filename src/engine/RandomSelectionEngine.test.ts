@@ -5,12 +5,18 @@ import {
   analyzeStudentDuplicates,
   createStudent,
   DEFAULT_PROBABILITIES,
+  DEFAULT_QUIZ_QUESTIONS,
   exportHistoryToCsv,
   exportStudentsToCsv,
   getEligibleStudents,
+  getQuizEvaluationSpeech,
   isCycleComplete,
   markStudentAsCalled,
+  parseBulkQuestionsInput,
   parseRawStudentInput,
+  pickRandomQuizQuestion,
+  QUIZ_CORRECT_SPEECH,
+  QUIZ_INCORRECT_SPEECH,
   resetCycleStudents,
   rollUfoOutcomeEvent,
   selectRandomStudentFairly,
@@ -157,3 +163,27 @@ test('CSV export formats student list and history with UTF-8 BOM', () => {
   assert.ok(histCsv.includes('"Nguyễn Minh Anh"'));
   assert.ok(histCsv.includes('"Lớp 3A"'));
 });
+
+test('Question Bank: pickRandomQuizQuestion, parseBulkQuestionsInput, and getQuizEvaluationSpeech', () => {
+  assert.equal(pickRandomQuizQuestion([]), null);
+  const picked = pickRandomQuizQuestion(DEFAULT_QUIZ_QUESTIONS, DEFAULT_QUIZ_QUESTIONS[0].id);
+  assert.ok(picked);
+  assert.notEqual(picked.id, DEFAULT_QUIZ_QUESTIONS[0].id);
+
+  const bulkRaw = `
+    Thủ đô của Việt Nam là gì? | Hà Nội | Huế | Đà Nẵng | Cần Thơ | A
+    Em hãy nêu một hành động bảo vệ môi trường? | Giữ vệ sinh lớp học, bỏ rác đúng nơi quy định
+  `;
+  const parsed = parseBulkQuestionsInput(bulkRaw);
+  assert.equal(parsed.length, 2);
+  assert.equal(parsed[0].type, 'multiple_choice');
+  assert.equal(parsed[0].correctIndex, 0);
+  assert.equal(parsed[1].type, 'open_ended');
+  assert.equal(parsed[1].answerText, 'Giữ vệ sinh lớp học, bỏ rác đúng nơi quy định');
+
+  assert.equal(getQuizEvaluationSpeech(true), 'Câu trả lời của em thật chính xác');
+  assert.equal(getQuizEvaluationSpeech(false), 'Câu trả lời của em chưa chính xác');
+  assert.equal(QUIZ_CORRECT_SPEECH, 'Câu trả lời của em thật chính xác');
+  assert.equal(QUIZ_INCORRECT_SPEECH, 'Câu trả lời của em chưa chính xác');
+});
+

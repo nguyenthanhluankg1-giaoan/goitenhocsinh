@@ -401,6 +401,31 @@ export const GameSettings: React.FC<GameSettingsProps> = ({
                 />
               </div>
 
+              {/* Question Answering Feature Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 border border-amber-500/40">
+                <div>
+                  <div className="font-semibold text-sm text-amber-200">
+                    Bật tính năng trả lời câu hỏi khi gọi tên
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Hiển thị câu hỏi thử thách dành cho học sinh vừa được UFO chọn
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  data-testid="settings-checkbox-quiz"
+                  aria-label="Bật tính năng trả lời câu hỏi khi gọi tên"
+                  checked={Boolean(settings.quizEnabled)}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      ...settings,
+                      quizEnabled: e.target.checked,
+                    })
+                  }
+                  className="w-5 h-5 accent-amber-400 cursor-pointer"
+                />
+              </div>
+
               {/* 2D Projector Mode Toggle */}
               <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
                 <div>

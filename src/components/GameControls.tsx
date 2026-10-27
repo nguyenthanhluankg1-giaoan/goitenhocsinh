@@ -15,6 +15,8 @@ import {
   VolumeX,
   LogOut,
   CloudCheck,
+  HelpCircle,
+  BookOpen,
 } from 'lucide-react';
 import { GameSettingsConfig, GameState } from '../types/game';
 
@@ -40,6 +42,8 @@ interface GameControlsProps {
   isSyncingCloud?: boolean;
   onGoogleLogin?: () => void;
   onGoogleLogout?: () => void;
+  onToggleQuiz?: () => void;
+  onOpenQuestionBank?: () => void;
   onStartHunt: () => void;
   onStopGame: () => void;
   onPauseOrResume: () => void;
@@ -66,6 +70,8 @@ export const GameControls: React.FC<GameControlsProps> = ({
   isSyncingCloud = false,
   onGoogleLogin,
   onGoogleLogout,
+  onToggleQuiz,
+  onOpenQuestionBank,
   onStartHunt,
   onStopGame,
   onPauseOrResume,
@@ -420,6 +426,40 @@ export const GameControls: React.FC<GameControlsProps> = ({
               <History className="w-4 h-4 text-purple-300" />
               <span>LỊCH SỬ GỌI TÊN</span>
             </button>
+
+            {/* BẬT/TẮT TRẢ LỜI CÂU HỎI */}
+            {onToggleQuiz && (
+              <button
+                type="button"
+                data-testid="btn-toggle-quiz"
+                onClick={onToggleQuiz}
+                className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                  settings.quizEnabled
+                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 border-emerald-200 shadow-[0_0_16px_rgba(52,211,153,0.4)]'
+                    : 'bg-[#162447] hover:bg-[#1F3160] text-emerald-200 border-emerald-500/40'
+                }`}
+              >
+                <HelpCircle className="w-4 h-4" />
+                <span>
+                  {settings.quizEnabled
+                    ? 'TRẢ LỜI CÂU HỎI: BẬT'
+                    : 'TRẢ LỜI CÂU HỎI: TẮT'}
+                </span>
+              </button>
+            )}
+
+            {/* NGÂN HÀNG CÂU HỎI */}
+            {onOpenQuestionBank && (
+              <button
+                type="button"
+                data-testid="btn-open-question-bank"
+                onClick={onOpenQuestionBank}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs md:text-sm bg-[#162447] hover:bg-[#1F3160] text-amber-200 border border-amber-500/40 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <BookOpen className="w-4 h-4 text-amber-300" />
+                <span>NGÂN HÀNG CÂU HỎI</span>
+              </button>
+            )}
 
             {/* 7. CÀI ĐẶT */}
             <button

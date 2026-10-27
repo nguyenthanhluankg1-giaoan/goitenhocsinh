@@ -61,6 +61,10 @@
           "type": "number",
           "description": "Maximum consecutive misses before forcing a catch (1-10)."
         },
+        "quizEnabled": {
+          "type": "boolean",
+          "description": "Whether question answering is enabled when a student is called."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -85,6 +89,7 @@
         "animationSpeed",
         "noRepeatInCycle",
         "maxConsecutiveMisses",
+        "quizEnabled",
         "createdAt",
         "updatedAt"
       ]
@@ -217,6 +222,75 @@
         "calledAtIso",
         "createdAt"
       ]
+    },
+    "QuizQuestionDoc": {
+      "title": "QuizQuestionDoc",
+      "description": "Stores a classroom question owned by a teacher for students selected by the UFO.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the teacher who owns this question.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "questionId": {
+          "type": "string",
+          "description": "Unique identifier of the question document.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "questionType": {
+          "type": "string",
+          "description": "Question format: multiple_choice or open_ended.",
+          "enum": ["multiple_choice", "open_ended"],
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "questionText": {
+          "type": "string",
+          "description": "Prompt text of the question.",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "options": {
+          "type": "array",
+          "description": "Bounded list (max 4) of option strings."
+        },
+        "correctIndex": {
+          "type": "number",
+          "description": "Correct option index (0-3)."
+        },
+        "answerText": {
+          "type": "string",
+          "description": "Explanation or suggested answer text.",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the question was created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the question was last updated."
+        }
+      },
+      "required": [
+        "ownerId",
+        "questionId",
+        "questionType",
+        "questionText",
+        "options",
+        "correctIndex",
+        "answerText",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -237,6 +311,12 @@
         "$ref": "#/entities/CallHistoryDoc"
       },
       "description": "Teacher-owned UFO student call history records."
+    },
+    "/questions/{questionId}": {
+      "schema": {
+        "$ref": "#/entities/QuizQuestionDoc"
+      },
+      "description": "Teacher-owned classroom quiz questions."
     }
   }
 }

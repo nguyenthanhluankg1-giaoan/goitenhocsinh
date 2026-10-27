@@ -4,6 +4,7 @@ import {
   EventProbabilities,
   GameSettingsConfig,
   HistoryRecord,
+  QuizQuestion,
   ScanChoreographyPattern,
   Student,
   UfoSurpriseEvent,
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: GameSettingsConfig = {
   noRepeatInCycle: true,
   fullscreen: false,
   prefer2DFallback: false,
+  quizEnabled: false,
 };
 
 export const DEFAULT_STUDENTS_NAMES: string[] = [
@@ -416,4 +418,147 @@ export function exportHistoryToCsv(records: HistoryRecord[]): string {
     return `${r.orderNumber},${escapedName},${escapedClass},${escapedTime},${r.missesBeforeCatch},${r.cycle},${r.calledStatus}`;
   });
   return '\uFEFF' + [header, ...rows].join('\n');
+}
+
+export const DEFAULT_QUIZ_QUESTIONS: QuizQuestion[] = [
+  {
+    id: 'q_default_1',
+    type: 'multiple_choice',
+    question: 'Hành tinh nào trong Hệ Mặt Trời được mệnh danh là "Hành tinh Đỏ"?',
+    options: ['Sao Kim', 'Sao Hỏa', 'Sao Mộc', 'Sao Thổ'],
+    correctIndex: 1,
+    answerText: 'Sao Hỏa có bề mặt chứa nhiều oxit sắt nên có màu đỏ đặc trưng.',
+    usedInSession: false,
+  },
+  {
+    id: 'q_default_2',
+    type: 'multiple_choice',
+    question: 'Kết quả của phép tính: 8 × 7 + 14 bằng bao nhiêu?',
+    options: ['68', '70', '72', '64'],
+    correctIndex: 1,
+    answerText: 'Ta có 8 × 7 = 56, sau đó 56 + 14 = 70.',
+    usedInSession: false,
+  },
+  {
+    id: 'q_default_3',
+    type: 'multiple_choice',
+    question: 'Trong các từ sau, từ nào viết ĐÚNG chính tả tiếng Việt?',
+    options: ['Sắn sàng', 'Sẵn sàng', 'Xẵn sàng', 'Sẳn sàng'],
+    correctIndex: 1,
+    answerText: '"Sẵn sàng" (với âm S và dấu ngã) là từ viết đúng chính tả.',
+    usedInSession: false,
+  },
+  {
+    id: 'q_default_4',
+    type: 'multiple_choice',
+    question: 'Thủ đô ngàn năm văn hiến của nước Việt Nam ta là thành phố nào?',
+    options: ['Đà Nẵng', 'Huế', 'Hà Nội', 'TP. Hồ Chí Minh'],
+    correctIndex: 2,
+    answerText: 'Thủ đô của nước Cộng hòa Xã hội chủ nghĩa Việt Nam là Hà Nội.',
+    usedInSession: false,
+  },
+  {
+    id: 'q_default_5',
+    type: 'multiple_choice',
+    question: 'Một hình vuông có cạnh dài 9 cm. Chu vi của hình vuông đó là bao nhiêu?',
+    options: ['18 cm', '27 cm', '36 cm', '81 cm'],
+    correctIndex: 2,
+    answerText: 'Chu vi hình vuông = Độ dài 1 cạnh × 4 = 9 × 4 = 36 cm.',
+    usedInSession: false,
+  },
+  {
+    id: 'q_default_6',
+    type: 'open_ended',
+    question: 'Em hãy đặt một câu có hình ảnh so sánh nói về mái trường hoặc thầy cô giáo!',
+    answerText: 'Gợi ý: "Trường học là ngôi nhà thứ hai của em" hoặc "Cô giáo dịu hiền như mẹ hiền".',
+    options: ['', '', '', ''],
+    correctIndex: 0,
+    usedInSession: false,
+  },
+];
+
+/**
+ * Selects a random question from the question bank, preferring questions not yet used in this session.
+ */
+export function pickRandomQuizQuestion(
+  questions: QuizQuestion[],
+  excludeQuestionId?: string,
+  rng: () => number = Math.random
+): QuizQuestion | null {
+  if (!questions || questions.length === 0) return null;
+  const unused = questions.filter(
+    (q) => !q.usedInSession && q.id !== excludeQuestionId
+  );
+  const pool =
+    unused.length > 0
+      ? unused
+      : questions.filter((q) => q.id !== excludeQuestionId);
+  const finalPool = pool.length > 0 ? pool : questions;
+  const idx = Math.floor(Math.max(0, Math.min(0.99999, rng())) * finalPool.length);
+  return finalPool[idx];
+}
+
+/**
+ * Parses bulk lines into QuizQuestion items.
+ * Supports:
+ * 1) "Câu hỏi | Đáp án A | Đáp án B | Đáp án C | Đáp án D | B" (Multiple choice)
+ * 2) "Câu hỏi | Đáp án gợi ý" (Open-ended)
+ */
+export function parseBulkQuestionsInput(rawText: string): QuizQuestion[] {
+  if (!rawText || typeof rawText !== 'string') return [];
+  const lines = rawText
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const result: QuizQuestion[] = [];
+  lines.forEach((line, idx) => {
+    const parts = line.split('|').map((p) => p.trim());
+    if (parts.length >= 6) {
+      const [qText, optA, optB, optC, optD, rawAns, explain] = parts;
+      const ansUpper = (rawAns || 'A').toUpperCase();
+      const correctIndex =
+        ansUpper === 'B' || ansUpper === '2'
+          ? 1
+          : ansUpper === 'C' || ansUpper === '3'
+          ? 2
+          : ansUpper === 'D' || ansUpper === '4'
+          ? 3
+          : 0;
+      if (qText) {
+        result.push({
+          id: `q_${Date.now()}_${idx}`,
+          type: 'multiple_choice',
+          question: qText,
+          options: [optA || 'A', optB || 'B', optC || 'C', optD || 'D'],
+          correctIndex,
+          answerText: explain || `Đáp án đúng là ${['A', 'B', 'C', 'D'][correctIndex]}`,
+          usedInSession: false,
+        });
+      }
+    } else if (parts.length >= 1 && parts[0]) {
+      result.push({
+        id: `q_${Date.now()}_${idx}`,
+        type: 'open_ended',
+        question: parts[0],
+        options: ['', '', '', ''],
+        correctIndex: 0,
+        answerText: parts[1] || 'Giáo viên nhận xét câu trả lời của học sinh.',
+        usedInSession: false,
+      });
+    }
+  });
+  return result;
+}
+
+export const QUIZ_CORRECT_SPEECH = 'Câu trả lời của em thật chính xác';
+export const QUIZ_INCORRECT_SPEECH = 'Câu trả lời của em chưa chính xác';
+
+/**
+ * Returns the exact Vietnamese spoken feedback phrase when evaluating a student's answer.
+ */
+export function getQuizEvaluationSpeech(isCorrect: boolean): string {
+  return isCorrect ? QUIZ_CORRECT_SPEECH : QUIZ_INCORRECT_SPEECH;
 }

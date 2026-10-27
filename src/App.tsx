@@ -9,6 +9,7 @@ import {
   GameSettingsConfig,
   GameState,
   HistoryRecord,
+  QuizQuestion,
   ScanChoreographyPattern,
   Student,
   UfoSurpriseEvent,
@@ -16,11 +17,14 @@ import {
 import {
   adjustProbabilitiesTo100,
   createDefaultRoster,
+  DEFAULT_QUIZ_QUESTIONS,
   DEFAULT_SETTINGS,
   getEligibleStudents,
+  getQuizEvaluationSpeech,
   isCycleComplete,
   markStudentAsCalled,
   pickDramaticTwist,
+  pickRandomQuizQuestion,
   pickRandomScanChoreography,
   resetCycleStudents,
   rollUfoOutcomeEvent,
@@ -38,6 +42,7 @@ import { ResultOverlay } from './components/ResultOverlay';
 import { StudentManager } from './components/StudentManager';
 import { HistoryPanel } from './components/HistoryPanel';
 import { GameSettings } from './components/GameSettings';
+import { QuestionBankModal } from './components/QuestionBankModal';
 import {
   clearCloudCallHistory,
   deleteCloudRoster,
@@ -49,6 +54,7 @@ import {
   signOutGoogleAccount,
   subscribeToAuthChanges,
   subscribeToTeacherCloudData,
+  syncCloudQuizQuestions,
 } from './services/firebaseService';
 import type { User } from 'firebase/auth';
 
@@ -57,6 +63,7 @@ const STORAGE_KEYS = {
   ACTIVE_ROSTER_ID: 'ufo_may_man_active_roster_id_v1',
   HISTORY: 'ufo_may_man_history_v1',
   SETTINGS: 'ufo_may_man_settings_v1',
+  QUESTIONS: 'ufo_may_man_questions_v1',
 };
 
 function loadInitialRosters(): ClassRoster[] {
@@ -120,6 +127,19 @@ function loadInitialSettings(): GameSettingsConfig {
   return { ...DEFAULT_SETTINGS };
 }
 
+function loadInitialQuestions(): QuizQuestion[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.QUESTIONS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Fallback
+  }
+  return [...DEFAULT_QUIZ_QUESTIONS];
+}
+
 export default function App() {
   const [rosters, setRosters] = useState<ClassRoster[]>(loadInitialRosters);
   const [activeRosterId, setActiveRosterId] = useState<string>(() =>
@@ -128,6 +148,12 @@ export default function App() {
   const [history, setHistory] = useState<HistoryRecord[]>(loadInitialHistory);
   const [settings, setSettings] =
     useState<GameSettingsConfig>(loadInitialSettings);
+  const [quizQuestions, setQuizQuestions] =
+    useState<QuizQuestion[]>(loadInitialQuestions);
+  const [activeQuizQuestion, setActiveQuizQuestion] =
+    useState<QuizQuestion | null>(() =>
+      pickRandomQuizQuestion(loadInitialQuestions())
+    );
 
   const [gameState, setGameState] = useState<GameState>('ready');
   const [bannerMessage, setBannerMessage] = useState<string>(
@@ -145,6 +171,7 @@ export default function App() {
   const [isStudentManagerOpen, setIsStudentManagerOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isQuestionBankOpen, setIsQuestionBankOpen] = useState(false);
 
   // Google Account & Cloud Sync State
   const [authUser, setAuthUser] = useState<User | null>(null);
@@ -159,6 +186,7 @@ export default function App() {
   const activeRosterIdRef = useRef(activeRosterId);
   const settingsRef = useRef(settings);
   const historyRef = useRef(history);
+  const quizQuestionsRef = useRef(quizQuestions);
   const authUserRef = useRef<User | null>(null);
   const consecutiveMissesRef = useRef(consecutiveMisses);
   const turnMissCountRef = useRef(0);
@@ -201,6 +229,27 @@ export default function App() {
   }, [settings]);
 
   useEffect(() => {
+    quizQuestionsRef.current = quizQuestions;
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.QUESTIONS,
+        JSON.stringify(quizQuestions)
+      );
+    } catch {
+      // Ignore
+    }
+    setActiveQuizQuestion((prev) => {
+      if (!prev && quizQuestions.length > 0) {
+        return pickRandomQuizQuestion(quizQuestions);
+      }
+      if (prev && !quizQuestions.some((q) => q.id === prev.id)) {
+        return pickRandomQuizQuestion(quizQuestions);
+      }
+      return prev;
+    });
+  }, [quizQuestions]);
+
+  useEffect(() => {
     consecutiveMissesRef.current = consecutiveMisses;
   }, [consecutiveMisses]);
 
@@ -237,7 +286,8 @@ export default function App() {
           rostersRef.current,
           activeRosterIdRef.current,
           settingsRef.current,
-          historyRef.current
+          historyRef.current,
+          quizQuestionsRef.current
         );
 
         unsubCloud = subscribeToTeacherCloudData(user, {
@@ -257,6 +307,11 @@ export default function App() {
           },
           onHistoryLoaded: (cloudHistory) => {
             setHistory(cloudHistory);
+          },
+          onQuestionsLoaded: (cloudQuestions) => {
+            if (cloudQuestions.length > 0) {
+              setQuizQuestions(cloudQuestions);
+            }
           },
         });
       } catch (err) {
@@ -505,13 +560,22 @@ export default function App() {
                       .finally(() => setIsSyncingCloud(false));
                   }
 
+                  const pickedQuestion = pickRandomQuizQuestion(
+                    quizQuestionsRef.current,
+                    activeQuizQuestion?.id
+                  );
+                  setActiveQuizQuestion(pickedQuestion);
                   setGameState('revealing');
                   setBannerMessage(
-                    `CHÚC MỪNG! ${fairTarget.name.toUpperCase()} ĐÃ ĐƯỢC UFO LỰA CHỌN!`
+                    settingsRef.current.quizEnabled && pickedQuestion
+                      ? `CHÚC MỪNG ${fairTarget.name.toUpperCase()}! HÃY TRẢ LỜI CÂU HỎI THỬ THÁCH CỦA UFO!`
+                      : `CHÚC MỪNG! ${fairTarget.name.toUpperCase()} ĐÃ ĐƯỢC UFO LỰA CHỌN!`
                   );
                   audioManager.playVictoryRevealFanfare(settingsRef.current);
                   audioManager.speakVietnamese(
-                    `Chúc mừng em, ${fairTarget.name} đã được UFO lựa chọn! Xin chúc mừng! Cả lớp hãy dành một tràng pháo tay!`,
+                    settingsRef.current.quizEnabled && pickedQuestion
+                      ? `Chúc mừng em, ${fairTarget.name} đã được UFO lựa chọn! Mời em trả lời câu hỏi thử thách trên màn hình!`
+                      : `Chúc mừng em, ${fairTarget.name} đã được UFO lựa chọn! Xin chúc mừng! Cả lớp hãy dành một tràng pháo tay!`,
                     settingsRef.current
                   );
                 },
@@ -788,7 +852,13 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isStudentManagerOpen || isHistoryOpen || isSettingsOpen) return;
+      if (
+        isStudentManagerOpen ||
+        isHistoryOpen ||
+        isSettingsOpen ||
+        isQuestionBankOpen
+      )
+        return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
@@ -816,6 +886,7 @@ export default function App() {
     handlePauseOrResume,
     handleStartHunt,
     isHistoryOpen,
+    isQuestionBankOpen,
     isSettingsOpen,
     isStudentManagerOpen,
   ]);
@@ -873,6 +944,31 @@ export default function App() {
         onOpenStudentManager={() => setIsStudentManagerOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onToggleQuiz={() => {
+          audioManager.unlockAudioByUserGesture();
+          const nextQuizEnabled = !settings.quizEnabled;
+          const nextSettings = {
+            ...settings,
+            quizEnabled: nextQuizEnabled,
+          };
+          setSettings(nextSettings);
+          if (nextQuizEnabled && !activeQuizQuestion) {
+            setActiveQuizQuestion(pickRandomQuizQuestion(quizQuestions));
+          }
+          setBannerMessage(
+            nextQuizEnabled
+              ? 'ĐÃ BẬT TÍNH NĂNG TRẢ LỜI CÂU HỎI CHO HỌC SINH ĐƯỢC UFO GỌI TÊN!'
+              : 'ĐÃ TẮT TÍNH NĂNG TRẢ LỜI CÂU HỎI (CHỈ GỌI TÊN HỌC SINH)!'
+          );
+          if (authUser) {
+            saveCloudWorkspacePreferences(
+              authUser,
+              activeRoster.id,
+              nextSettings
+            ).catch((e) => console.error(e));
+          }
+        }}
+        onOpenQuestionBank={() => setIsQuestionBankOpen(true)}
         onToggleSound={() => {
           audioManager.unlockAudioByUserGesture();
           const nextSound = !settings.soundEnabled;
@@ -897,6 +993,41 @@ export default function App() {
         currentCycle={activeRoster.currentCycle}
         totalStudents={students.length}
         uncalledCount={uncalledCount}
+        quizEnabled={settings.quizEnabled}
+        activeQuestion={activeQuizQuestion}
+        onSelectDifferentQuestion={() => {
+          const nextQ = pickRandomQuizQuestion(
+            quizQuestions,
+            activeQuizQuestion?.id
+          );
+          setActiveQuizQuestion(nextQ);
+        }}
+        onSpeakQuestion={(q) => {
+          audioManager.unlockAudioByUserGesture();
+          const optsText =
+            q.type === 'multiple_choice' && q.options.length > 0
+              ? `. Đáp án A: ${q.options[0] || ''}. Đáp án B: ${
+                  q.options[1] || ''
+                }. Đáp án C: ${q.options[2] || ''}. Đáp án D: ${
+                  q.options[3] || ''
+                }.`
+              : '';
+          audioManager.speakVietnamese(
+            `Câu hỏi dành cho em: ${q.question}${optsText}`,
+            settings
+          );
+        }}
+        onQuizAnswerEvaluated={(isCorrect) => {
+          audioManager.unlockAudioByUserGesture();
+          const phrase = getQuizEvaluationSpeech(isCorrect);
+          setBannerMessage(phrase.toUpperCase() + '!');
+          if (isCorrect) {
+            audioManager.playVictoryRevealFanfare(settings);
+          } else {
+            audioManager.playFunnyBoingMiss(settings);
+          }
+          audioManager.speakVietnamese(phrase, settings);
+        }}
         onContinueNextTurn={handlePauseOrResume}
         onReplayTurn={handleReplay}
         onStartNewCycle={handleStartNewCycle}
@@ -1047,6 +1178,37 @@ export default function App() {
           }
         }}
         onToggleFullscreen={handleToggleFullscreen}
+      />
+
+      {/* Question Bank Modal */}
+      <QuestionBankModal
+        isOpen={isQuestionBankOpen}
+        quizEnabled={settings.quizEnabled}
+        questions={quizQuestions}
+        onClose={() => setIsQuestionBankOpen(false)}
+        onToggleQuizEnabled={(enabled) => {
+          const nextSettings = { ...settings, quizEnabled: enabled };
+          setSettings(nextSettings);
+          if (enabled && !activeQuizQuestion) {
+            setActiveQuizQuestion(pickRandomQuizQuestion(quizQuestions));
+          }
+          if (authUser) {
+            saveCloudWorkspacePreferences(
+              authUser,
+              activeRoster.id,
+              nextSettings
+            ).catch((e) => console.error(e));
+          }
+        }}
+        onUpdateQuestions={(nextQuestions) => {
+          setQuizQuestions(nextQuestions);
+          if (authUser) {
+            setIsSyncingCloud(true);
+            syncCloudQuizQuestions(authUser.uid, nextQuestions)
+              .catch((e) => console.error(e))
+              .finally(() => setIsSyncingCloud(false));
+          }
+        }}
       />
     </main>
   );

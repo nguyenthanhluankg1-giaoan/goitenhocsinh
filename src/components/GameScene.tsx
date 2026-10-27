@@ -31,10 +31,9 @@ interface GameSceneProps {
 
 // Pre-allocated math helpers at module scope to prevent GC inside render loop
 const _targetUfoPos = new THREE.Vector3();
-const _targetCamPos = new THREE.Vector3();
-const _targetCamLook = new THREE.Vector3();
-const _currentCamLook = new THREE.Vector3(0, 2.2, 0);
 const _starDummy = new THREE.Object3D();
+export const FIXED_CLASSROOM_CAMERA_POS = new THREE.Vector3(0, 6.8, 16.5);
+export const FIXED_CLASSROOM_CAMERA_LOOK = new THREE.Vector3(0, 1.9, 0);
 
 /**
  * Detects software WebGL (SwiftShader, llvmpipe, Basic Render) from the GPU renderer string.
@@ -163,6 +162,7 @@ export const GameScene: React.FC<GameSceneProps> = ({
 
     const canvas = renderer.domElement;
     canvas.setAttribute('data-testid', 'ufo-3d-canvas');
+    canvas.setAttribute('data-camera-mode', 'stationary');
     const onContextLost = (e: Event) => {
       e.preventDefault();
       setWebglFailed(true);
@@ -177,10 +177,10 @@ export const GameScene: React.FC<GameSceneProps> = ({
     scene.background = new THREE.Color(0x0b1224);
     scene.fog = new THREE.FogExp2(0x0b1224, 0.0085);
 
-    // Camera
+    // Camera (Fixed stationary classroom view — classroom never moves with the UFO)
     const camera = new THREE.PerspectiveCamera(46, width / height, 0.1, 160);
-    camera.position.set(0, 7.2, 16.5);
-    camera.lookAt(0, 2.2, 0);
+    camera.position.copy(FIXED_CLASSROOM_CAMERA_POS);
+    camera.lookAt(FIXED_CLASSROOM_CAMERA_LOOK);
 
     // Mandatory Studio Environment Reflection (RoomEnvironment)
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -217,7 +217,7 @@ export const GameScene: React.FC<GameSceneProps> = ({
     rimLight.position.set(-12, 10, -10);
     scene.add(rimLight);
 
-    // Build Classroom Environment + Planets + Stars
+    // Build Classroom Environment + Planets + Stars (Stationary backdrop)
     const envRig: ClassroomEnvironmentRig = createClassroomScene(
       renderer,
       isSoftwareGl
@@ -311,21 +311,11 @@ export const GameScene: React.FC<GameSceneProps> = ({
       elapsedTotal += dt * speedMult;
       const t = elapsedTotal;
 
-      // Ambient Night Window Sky & Luxury Classroom Chandelier/Globe Motion
-      envRig.starField.rotation.y = t * 0.02;
-      envRig.planetsGroup.rotation.y = Math.sin(t * 0.15) * 0.06;
-      if (envRig.chandeliersGroup) {
-        envRig.chandeliersGroup.rotation.z = Math.sin(t * 1.1) * 0.015;
-      }
-      if (envRig.globeMesh) {
-        envRig.globeMesh.rotation.y = t * 0.85;
-      }
-
-      // UFO Saucer Spin & Beacon Lights
+      // UFO Saucer Spin & Beacon Lights (Only the UFO moves; classroom remains stationary)
       ufoRig.saucerRim.rotation.y = t * 2.6;
       ufoRig.alienHead.rotation.y = Math.sin(t * 2.2) * 0.35;
 
-      // Determine Target UFO Position & Camera Framing by GameState
+      // Determine Target UFO Position by GameState
       const hovNode = findStudentNode(hovStu?.id);
       const selNode = findStudentNode(selStu?.id);
 
@@ -342,18 +332,14 @@ export const GameScene: React.FC<GameSceneProps> = ({
           4.55 + Math.sin(t * 1.8) * 0.25,
           1.2 + Math.cos(t * 0.6) * 0.8
         );
-        _targetCamPos.set(0, 6.8, 16.5);
-        _targetCamLook.set(0, 1.9, 0);
       } else if (st === 'entering') {
-        // Stage A: Swoop in from deep space with energetic banking
+        // Stage A: Swoop in with energetic banking
         _targetUfoPos.set(
           Math.sin(t * 3.2) * 3.5,
           4.8 + Math.cos(t * 2.5) * 0.4,
           1.0
         );
         targetTiltZ = -Math.cos(t * 3.2) * 0.25;
-        _targetCamPos.set(0, 6.6, 15.2);
-        _targetCamLook.set(_targetUfoPos.x * 0.4, 2.4, 0);
       } else if (st === 'scanning') {
         // Stage B: Scan classroom desks using active choreography pattern
         beamVisible = true;
@@ -391,8 +377,6 @@ export const GameScene: React.FC<GameSceneProps> = ({
           -0.35,
           0.35
         );
-        _targetCamPos.set(_targetUfoPos.x * 0.35, 7.0, 15.6);
-        _targetCamLook.set(_targetUfoPos.x * 0.5, 2.2, _targetUfoPos.z * 0.4);
       } else if (st === 'locking') {
         // Lock onto target student desk
         beamVisible = true;
@@ -405,8 +389,6 @@ export const GameScene: React.FC<GameSceneProps> = ({
             lockNode.homePosition.z
           );
         }
-        _targetCamPos.set(_targetUfoPos.x * 0.5, 6.2, 13.5);
-        _targetCamLook.set(_targetUfoPos.x * 0.75, 2.0, _targetUfoPos.z * 0.6);
       } else if (st === 'missing') {
         // Event 2 / Event 5: UFO misses, wobbles off balance, student dodges sideways
         beamVisible = true;
@@ -420,8 +402,6 @@ export const GameScene: React.FC<GameSceneProps> = ({
         }
         targetTiltZ = Math.sin(t * 14) * 0.48;
         targetTiltX = Math.cos(t * 12) * 0.28;
-        _targetCamPos.set(_targetUfoPos.x * 0.4, 6.5, 14.2);
-        _targetCamLook.set(_targetUfoPos.x * 0.6, 2.2, _targetUfoPos.z * 0.5);
       } else if (st === 'falseSignal') {
         // Event 3: False signal smoke & stars, UFO tilts in confusion
         beamVisible = true;
@@ -433,8 +413,6 @@ export const GameScene: React.FC<GameSceneProps> = ({
         ufoRig.decoyGroup.position.set(dx, 0.6, dz);
         ufoRig.decoyGroup.rotation.y = t * 3.5;
         targetTiltZ = 0.32 * Math.sin(t * 5);
-        _targetCamPos.set(dx * 0.4, 6.4, 14.0);
-        _targetCamLook.set(dx * 0.6, 2.0, dz * 0.5);
       } else if (st === 'catching' || st === 'revealing') {
         // Event 1: Catch! Lift the chosen chibi student up into the tractor beam!
         beamVisible = true;
@@ -446,24 +424,12 @@ export const GameScene: React.FC<GameSceneProps> = ({
             5.6,
             selNode.homePosition.z
           );
-          _targetCamPos.set(
-            selNode.homePosition.x * 0.6,
-            5.4,
-            selNode.homePosition.z + 11.2
-          );
-          _targetCamLook.set(
-            selNode.homePosition.x * 0.85,
-            2.6,
-            selNode.homePosition.z
-          );
         } else {
           _targetUfoPos.set(0, 5.6, 0);
-          _targetCamPos.set(0, 5.4, 11.8);
-          _targetCamLook.set(0, 2.6, 0);
         }
       }
 
-      // Smooth exponential damping on UFO and Camera
+      // Smooth exponential damping on UFO only (Camera remains strictly stationary)
       const dampFactor = 1 - Math.exp(-5.5 * dt);
       ufoRig.root.position.lerp(_targetUfoPos, dampFactor);
       ufoRig.bodyGroup.rotation.z = THREE.MathUtils.lerp(
@@ -476,10 +442,6 @@ export const GameScene: React.FC<GameSceneProps> = ({
         targetTiltX,
         dampFactor
       );
-
-      camera.position.lerp(_targetCamPos, dampFactor * 0.85);
-      _currentCamLook.lerp(_targetCamLook, dampFactor * 0.9);
-      camera.lookAt(_currentCamLook);
 
       // Tractor Beam & Ground Radar updates
       ufoRig.tractorBeamGroup.visible = beamVisible;

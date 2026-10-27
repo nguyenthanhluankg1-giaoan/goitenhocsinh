@@ -43,6 +43,7 @@ service cloud.firestore {
         'animationSpeed',
         'noRepeatInCycle',
         'maxConsecutiveMisses',
+        'quizEnabled',
         'createdAt',
         'updatedAt'
       ]) &&
@@ -59,6 +60,7 @@ service cloud.firestore {
         'animationSpeed',
         'noRepeatInCycle',
         'maxConsecutiveMisses',
+        'quizEnabled',
         'createdAt',
         'updatedAt'
       ]) &&
@@ -75,6 +77,7 @@ service cloud.firestore {
       data.animationSpeed is number && data.animationSpeed >= 0.25 && data.animationSpeed <= 3 &&
       data.noRepeatInCycle is bool &&
       data.maxConsecutiveMisses is int && data.maxConsecutiveMisses >= 1 && data.maxConsecutiveMisses <= 10 &&
+      data.quizEnabled is bool &&
       data.createdAt is timestamp &&
       data.updatedAt is timestamp;
     }
@@ -150,6 +153,44 @@ service cloud.firestore {
       data.createdAt is timestamp;
     }
 
+    // Validation Blueprint 4: QuizQuestionDoc (/questions/{questionId})
+    function isValidQuizQuestion(data) {
+      return data.keys().hasAll([
+        'ownerId',
+        'questionId',
+        'questionType',
+        'questionText',
+        'options',
+        'correctIndex',
+        'answerText',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.keys().hasOnly([
+        'ownerId',
+        'questionId',
+        'questionType',
+        'questionText',
+        'options',
+        'correctIndex',
+        'answerText',
+        'createdAt',
+        'updatedAt'
+      ]) &&
+      data.ownerId == request.auth.uid &&
+      isValidId(data.ownerId) &&
+      isValidId(data.questionId) &&
+      data.questionType is string && data.questionType.size() >= 1 && data.questionType.size() <= 30 &&
+      data.questionType in ['multiple_choice', 'open_ended'] &&
+      data.questionText is string && data.questionText.size() >= 1 && data.questionText.size() <= 500 &&
+      data.options is list && data.options.size() <= 4 &&
+      (data.options.size() == 0 || (data.options[0] is string && data.options[0].size() <= 200)) &&
+      data.correctIndex is int && data.correctIndex >= 0 && data.correctIndex <= 3 &&
+      data.answerText is string && data.answerText.size() >= 1 && data.answerText.size() <= 500 &&
+      data.createdAt is timestamp &&
+      data.updatedAt is timestamp;
+    }
+
     // Collection 1: TeacherWorkspace (/users/{userId})
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && (resource == null || existing().ownerId == request.auth.uid);
@@ -185,6 +226,7 @@ service cloud.firestore {
             'animationSpeed',
             'noRepeatInCycle',
             'maxConsecutiveMisses',
+            'quizEnabled',
             'updatedAt'
           ])
         );
@@ -251,6 +293,41 @@ service cloud.firestore {
 
       allow delete: if isVerifiedUser() &&
         isValidId(historyId) &&
+        existing().ownerId == request.auth.uid;
+    }
+
+    // Collection 4: QuizQuestionDoc (/questions/{questionId})
+    match /questions/{questionId} {
+      allow get: if isSignedIn() && isValidId(questionId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+
+      allow create: if isVerifiedUser() &&
+        isValidId(questionId) &&
+        isValidQuizQuestion(incoming()) &&
+        incoming().questionId == questionId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+
+      allow update: if isValidQuizQuestion(incoming()) &&
+        isVerifiedUser() &&
+        isValidId(questionId) &&
+        existing().ownerId == request.auth.uid &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().questionId == existing().questionId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'questionType',
+          'questionText',
+          'options',
+          'correctIndex',
+          'answerText',
+          'updatedAt'
+        ]);
+
+      allow delete: if isVerifiedUser() &&
+        isValidId(questionId) &&
         existing().ownerId == request.auth.uid;
     }
   }

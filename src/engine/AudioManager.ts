@@ -11,6 +11,8 @@ class AudioManagerService {
   private hoverLoopTimer: ReturnType<typeof setInterval> | null = null;
   private voicesLoaded = false;
   private cachedVietnameseVoice: SpeechSynthesisVoice | null = null;
+  private activeUtterance: SpeechSynthesisUtterance | null = null;
+  private lastSpokenText = '';
 
   constructor() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -82,6 +84,10 @@ class AudioManagerService {
     return this.cachedVietnameseVoice !== null;
   }
 
+  public getLastSpokenText(): string {
+    return this.lastSpokenText;
+  }
+
   /**
    * Speaks a Vietnamese phrase cleanly, cancelling any previous utterance so voices never overlap.
    */
@@ -90,10 +96,19 @@ class AudioManagerService {
     settings: GameSettingsConfig,
     onEnd?: () => void
   ): void {
-    if (!this.hasUserInteracted || !settings.voiceEnabled || !settings.soundEnabled) {
+    const isVoiceAllowed = settings.voiceEnabled !== false;
+    const isSoundAllowed = settings.soundEnabled !== false;
+
+    if (!this.hasUserInteracted || !isVoiceAllowed || !isSoundAllowed) {
       if (onEnd) onEnd();
       return;
     }
+
+    this.lastSpokenText = text;
+    if (typeof document !== 'undefined' && document.body) {
+      document.body.dataset.lastSpoken = text;
+    }
+
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       if (onEnd) onEnd();
       return;
@@ -101,22 +116,42 @@ class AudioManagerService {
 
     try {
       window.speechSynthesis.cancel();
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
       const utterance = new SpeechSynthesisUtterance(text);
+      this.activeUtterance = utterance;
       utterance.lang = 'vi-VN';
-      utterance.volume = Math.max(0, Math.min(1, settings.voiceVolume));
-      utterance.rate = Math.max(0.6, Math.min(1.5, settings.voiceRate));
+      const safeVol = Number.isFinite(settings.voiceVolume)
+        ? settings.voiceVolume
+        : 1.0;
+      const safeRate = Number.isFinite(settings.voiceRate)
+        ? settings.voiceRate
+        : 1.0;
+      utterance.volume = Math.max(0, Math.min(1, safeVol));
+      utterance.rate = Math.max(0.6, Math.min(1.5, safeRate));
       utterance.pitch = 1.08;
 
       const voices = window.speechSynthesis.getVoices();
-      const bestVi = this.cachedVietnameseVoice || this.findBestVietnameseVoice(voices);
+      const bestVi =
+        this.cachedVietnameseVoice || this.findBestVietnameseVoice(voices);
       if (bestVi) {
         utterance.voice = bestVi;
       }
 
-      if (onEnd) {
-        utterance.onend = () => onEnd();
-        utterance.onerror = () => onEnd();
-      }
+      utterance.onend = () => {
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+        if (onEnd) onEnd();
+      };
+      utterance.onerror = () => {
+        if (this.activeUtterance === utterance) {
+          this.activeUtterance = null;
+        }
+        if (onEnd) onEnd();
+      };
 
       window.speechSynthesis.speak(utterance);
     } catch {
@@ -125,6 +160,7 @@ class AudioManagerService {
   }
 
   public stopAllSpeech(): void {
+    this.activeUtterance = null;
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();

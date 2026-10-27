@@ -27,6 +27,7 @@ import {
   ClassRoster,
   GameSettingsConfig,
   HistoryRecord,
+  QuizQuestion,
   Student,
 } from '../types/game';
 import { adjustProbabilitiesTo100 } from '../engine/RandomSelectionEngine';
@@ -182,14 +183,15 @@ function stripUidPrefix(uid: string, docRosterId: string): string {
 
 /**
  * Ensures the signed-in teacher's workspace exists in Firestore.
- * If this is their first sign-in, seeds their current local rosters, settings, and history to their Google account.
+ * If this is their first sign-in, seeds their current local rosters, settings, history, and questions to their Google account.
  */
 export async function initializeOrLoadTeacherCloudData(
   user: User,
   localRosters: ClassRoster[],
   localActiveRosterId: string,
   localSettings: GameSettingsConfig,
-  localHistory: HistoryRecord[]
+  localHistory: HistoryRecord[],
+  localQuestions: QuizQuestion[]
 ): Promise<void> {
   const uid = sanitizeValidId(user.uid, 'user');
   const userDocPath = `users/${uid}`;
@@ -207,7 +209,7 @@ export async function initializeOrLoadTeacherCloudData(
       localActiveRosterId || localRosters[0]?.id || 'class_default_3a',
       'class'
     );
-    // 1. Create /users/{uid} workspace document first (required by Pillar 11 before creating /rosters)
+    // 1. Create /users/{uid} workspace document first (required by Pillar 11 before creating /rosters or /questions)
     try {
       await setDoc(userDocRef, {
         ownerId: uid,
@@ -240,6 +242,7 @@ export async function initializeOrLoadTeacherCloudData(
         maxConsecutiveMisses: Math.round(
           clampNumber(localSettings.maxConsecutiveMisses, 1, 10)
         ),
+        quizEnabled: Boolean(localSettings.quizEnabled),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -262,6 +265,9 @@ export async function initializeOrLoadTeacherCloudData(
         await saveCloudCallHistoryRecord(user.uid, targetRosterId, rec);
       }
     }
+
+    // 4. Seed initial quiz questions (up to 40)
+    await syncCloudQuizQuestions(user.uid, localQuestions);
   }
 }
 
@@ -371,6 +377,7 @@ export async function saveCloudWorkspacePreferences(
       maxConsecutiveMisses: Math.round(
         clampNumber(settings.maxConsecutiveMisses, 1, 10)
       ),
+      quizEnabled: Boolean(settings.quizEnabled),
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
@@ -425,8 +432,79 @@ export async function clearCloudCallHistory(uid: string): Promise<void> {
   }
 }
 
+export async function syncCloudQuizQuestions(
+  uid: string,
+  questions: QuizQuestion[]
+): Promise<void> {
+  const cleanUid = sanitizeValidId(uid, 'user');
+  const q = query(
+    collection(db, 'questions'),
+    where('ownerId', '==', cleanUid)
+  );
+  try {
+    const existingSnap = await getDocs(q);
+    const nextDocIds = new Set<string>();
+
+    for (const item of questions.slice(0, 50)) {
+      const qDocId = buildRosterDocId(cleanUid, item.id);
+      nextDocIds.add(qDocId);
+      const qRef = doc(db, 'questions', qDocId);
+      const safeType =
+        item.type === 'open_ended' ? 'open_ended' : 'multiple_choice';
+      const safeOptions = (item.options || ['A', 'B', 'C', 'D'])
+        .slice(0, 4)
+        .map((o, idx) =>
+          sanitizeBoundedText(o || `Đáp án ${idx + 1}`, 200, `Đáp án ${idx + 1}`)
+        );
+      while (safeOptions.length < 4) {
+        safeOptions.push(`Đáp án ${safeOptions.length + 1}`);
+      }
+
+      const existingDoc = existingSnap.docs.find((d) => d.id === qDocId);
+      if (existingDoc) {
+        await updateDoc(qRef, {
+          questionType: safeType,
+          questionText: sanitizeBoundedText(item.question, 500, 'Câu hỏi'),
+          options: safeOptions,
+          correctIndex: Math.round(clampNumber(item.correctIndex, 0, 3)),
+          answerText: sanitizeBoundedText(
+            item.answerText || 'Đáp án đúng',
+            500,
+            'Đáp án đúng'
+          ),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(qRef, {
+          ownerId: cleanUid,
+          questionId: qDocId,
+          questionType: safeType,
+          questionText: sanitizeBoundedText(item.question, 500, 'Câu hỏi'),
+          options: safeOptions,
+          correctIndex: Math.round(clampNumber(item.correctIndex, 0, 3)),
+          answerText: sanitizeBoundedText(
+            item.answerText || 'Đáp án đúng',
+            500,
+            'Đáp án đúng'
+          ),
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    }
+
+    for (const oldDoc of existingSnap.docs) {
+      if (!nextDocIds.has(oldDoc.id)) {
+        await deleteDoc(oldDoc.ref);
+      }
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'questions');
+  }
+}
+
 /**
- * Subscribes to the authenticated teacher's workspace, rosters, and call history in real time.
+ * Subscribes to the authenticated teacher's workspace, rosters, call history, and quiz questions in real time.
  */
 export function subscribeToTeacherCloudData(
   user: User,
@@ -437,6 +515,7 @@ export function subscribeToTeacherCloudData(
     ) => void;
     onRostersLoaded: (rosters: ClassRoster[]) => void;
     onHistoryLoaded: (history: HistoryRecord[]) => void;
+    onQuestionsLoaded?: (questions: QuizQuestion[]) => void;
   }
 ): () => void {
   const cleanUid = sanitizeValidId(user.uid, 'user');
@@ -459,6 +538,7 @@ export function subscribeToTeacherCloudData(
         animationSpeed: Number(data.animationSpeed ?? 1),
         noRepeatInCycle: Boolean(data.noRepeatInCycle),
         maxConsecutiveMisses: Number(data.maxConsecutiveMisses ?? 4),
+        quizEnabled: Boolean(data.quizEnabled),
         probabilities: adjustProbabilitiesTo100({
           catch: catchP,
           miss: missP,
@@ -555,9 +635,45 @@ export function subscribeToTeacherCloudData(
     }
   );
 
+  // 4. Subscribe to /questions where ownerId == uid
+  const questionsQuery = query(
+    collection(db, 'questions'),
+    where('ownerId', '==', cleanUid)
+  );
+  const unsubQuestions = onSnapshot(
+    questionsQuery,
+    (snap) => {
+      if (snap.empty || !callbacks.onQuestionsLoaded) return;
+      const loadedQuestions: QuizQuestion[] = snap.docs.map((docSnap) => {
+        const d = docSnap.data();
+        const opts = Array.isArray(d.options) ? d.options.map(String) : [];
+        return {
+          id: stripUidPrefix(cleanUid, String(d.questionId || docSnap.id)),
+          type:
+            d.questionType === 'open_ended' ? 'open_ended' : 'multiple_choice',
+          question: String(d.questionText || ''),
+          options: [
+            opts[0] || 'A',
+            opts[1] || 'B',
+            opts[2] || 'C',
+            opts[3] || 'D',
+          ],
+          correctIndex: Number(d.correctIndex ?? 0),
+          answerText: String(d.answerText || ''),
+          usedInSession: false,
+        };
+      });
+      callbacks.onQuestionsLoaded(loadedQuestions);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'questions');
+    }
+  );
+
   return () => {
     unsubWorkspace();
     unsubRosters();
     unsubHistory();
+    unsubQuestions();
   };
 }
